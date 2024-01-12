@@ -39,6 +39,8 @@ class KeyMaterial:
             node_routing_keys = RoutingKeys.derive(dh_shared_key)
 
             # TODO: find a proper library for Ristretto operations
+            # https://github.com/youngjoon-lee/pysphinx/issues/2
+            #
             # https://github.com/nymtech/sphinx/blob/ca107d94360cdf8bbfbdb12fe5320ed74f80e40c/src/header/keys.rs#L128-L128
             # blinding_factor_scalar = Scalar.from_bytes_mod_order(node_routing_keys.blinding_factor)
             # accumulated_privkey = product(accumulated_privkey, blinding_factor_scalar)
@@ -55,6 +57,8 @@ class KeyMaterial:
         Blind shared_pubkey to derive a next public key.
         """
         # TODO: find a proper library for Ristretto operations
+        # https://github.com/youngjoon-lee/pysphinx/issues/2
+        #
         # https://github.com/nymtech/sphinx/blob/ca107d94360cdf8bbfbdb12fe5320ed74f80e40c/src/header/mod.rs#L236-L236
         # For now, we're skipping blinding because we don't accumulate a private key using blinding factor
         # when deriving RoutingKeys.
