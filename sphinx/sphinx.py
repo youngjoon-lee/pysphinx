@@ -5,6 +5,7 @@ from typing import List, Self
 
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
 
+from sphinx.error import UnknownHeaderTypeError
 from sphinx.header.header import (
     ProcessedFinalHopHeader,
     ProcessedForwardHopHeader,
@@ -58,21 +59,22 @@ class SphinxPacket:
         If not, this returns ProcessedFinalHopPacket.
         """
         processed_header = self.header.process(private_key)
-        if isinstance(processed_header, ProcessedForwardHopHeader):
-            return ProcessedForwardHopPacket(
-                SphinxPacket(
-                    processed_header.next_header,
+        match processed_header:
+            case ProcessedForwardHopHeader():
+                return ProcessedForwardHopPacket(
+                    SphinxPacket(
+                        processed_header.next_header,
+                        self.payload.unwrap(processed_header.payload_key),
+                    ),
+                    processed_header.next_node_address,
+                )
+            case ProcessedFinalHopHeader():
+                return ProcessedFinalHopPacket(
+                    processed_header.destination_address,
                     self.payload.unwrap(processed_header.payload_key),
-                ),
-                processed_header.next_node_address,
-            )
-        elif isinstance(processed_header, ProcessedFinalHopHeader):
-            return ProcessedFinalHopPacket(
-                processed_header.destination_address,
-                self.payload.unwrap(processed_header.payload_key),
-            )
-        else:
-            assert False  # unknown type of processed header
+                )
+            case _:
+                raise UnknownHeaderTypeError
 
 
 @dataclass

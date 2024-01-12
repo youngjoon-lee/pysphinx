@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Optional, Self, Tuple, TypeAlias
+from enum import Enum
+from typing import List, Optional, Self, Tuple
 
 from sphinx.const import (
     DELAY,
@@ -15,6 +16,7 @@ from sphinx.const import (
     VERSION_LENGTH,
 )
 from sphinx.crypto import aes128ctr
+from sphinx.error import UnknownRoutingFlagError
 from sphinx.header.keys import RoutingKeys
 from sphinx.header.mac import IntegrityHmac
 from sphinx.node import Node, NodeAddress
@@ -123,10 +125,12 @@ class EncapsulatedRoutingInformation:
         )
 
 
-RoutingFlag: TypeAlias = bytes  # 1byte
+class RoutingFlag(Enum):
+    ROUTING_FLAG_FORWARD_HOP = b"\x01"
+    ROUTING_FLAG_FINAL_HOP = b"\x02"
 
-ROUTING_FLAG_FORWARD_HOP: RoutingFlag = b"\x01"
-ROUTING_FLAG_FINAL_HOP: RoutingFlag = b"\x02"
+    def bytes(self) -> bytes:
+        return bytes(self.value)
 
 
 @dataclass
@@ -172,29 +176,30 @@ class EncryptedRoutingInformation:
         decrypted = decrypt(self.value + padding, stream_cipher_key)
 
         flag = RoutingFlag(decrypted[0:FLAG_LENGTH])
-        if flag == ROUTING_FLAG_FORWARD_HOP:
-            i = FLAG_LENGTH + VERSION_LENGTH
-            node_address = decrypted[i : i + NODE_ADDRESS_LENGTH]
-            i += NODE_ADDRESS_LENGTH + DELAY_LENGTH
-            next_hop_integrity_mac = IntegrityHmac(
-                decrypted[i : i + IntegrityHmac.size()]
-            )
-            i += IntegrityHmac.size()
-            encrypted_next_routing_info = EncryptedRoutingInformation(decrypted[i:])
-            return (
-                EncapsulatedRoutingInformation(
-                    encrypted_next_routing_info, next_hop_integrity_mac
-                ),
-                node_address,
-            )
-        elif flag == ROUTING_FLAG_FINAL_HOP:
-            i = FLAG_LENGTH + VERSION_LENGTH
-            destination_address = decrypted[i : i + NODE_ADDRESS_LENGTH]
-            i += NODE_ADDRESS_LENGTH
-            _ = decrypted[i : i + SURB_IDENTIFIER_LENGTH]
-            return (None, destination_address)
-        else:
-            assert False  # Unknown flag
+        match flag:
+            case RoutingFlag.ROUTING_FLAG_FORWARD_HOP:
+                i = FLAG_LENGTH + VERSION_LENGTH
+                node_address = decrypted[i : i + NODE_ADDRESS_LENGTH]
+                i += NODE_ADDRESS_LENGTH + DELAY_LENGTH
+                next_hop_integrity_mac = IntegrityHmac(
+                    decrypted[i : i + IntegrityHmac.size()]
+                )
+                i += IntegrityHmac.size()
+                encrypted_next_routing_info = EncryptedRoutingInformation(decrypted[i:])
+                return (
+                    EncapsulatedRoutingInformation(
+                        encrypted_next_routing_info, next_hop_integrity_mac
+                    ),
+                    node_address,
+                )
+            case RoutingFlag.ROUTING_FLAG_FINAL_HOP:
+                i = FLAG_LENGTH + VERSION_LENGTH
+                destination_address = decrypted[i : i + NODE_ADDRESS_LENGTH]
+                i += NODE_ADDRESS_LENGTH
+                _ = decrypted[i : i + SURB_IDENTIFIER_LENGTH]
+                return (None, destination_address)
+            case _:
+                raise UnknownRoutingFlagError(flag)
 
 
 @dataclass
@@ -226,7 +231,7 @@ class RoutingInformation:
         next_encapsulated_routing_info: EncapsulatedRoutingInformation,
     ) -> Self:
         return cls(
-            ROUTING_FLAG_FORWARD_HOP,
+            RoutingFlag.ROUTING_FLAG_FORWARD_HOP,
             node,
             next_encapsulated_routing_info.integrity_mac.value,
             next_encapsulated_routing_info.encrypted_routing_info.truncate(),
@@ -234,7 +239,7 @@ class RoutingInformation:
 
     def encrypt(self, key: bytes) -> EncryptedRoutingInformation:
         body = (
-            self.flag
+            self.flag.bytes()
             + VERSION
             + self.node_address
             + DELAY
@@ -275,7 +280,7 @@ class FinalRoutingInformation:
 
     @classmethod
     def build(cls, destination: NodeAddress) -> Self:
-        return cls(ROUTING_FLAG_FINAL_HOP, destination)
+        return cls(RoutingFlag.ROUTING_FLAG_FINAL_HOP, destination)
 
     @staticmethod
     def size() -> int:
@@ -292,7 +297,11 @@ class FinalRoutingInformation:
         """
         padding = random_bytes(PaddedFinalRoutingInformation.padding_size(route_len))
         return PaddedFinalRoutingInformation(
-            self.flag + VERSION + self.destination_address + SURB_IDENTIFIER + padding
+            self.flag.bytes()
+            + VERSION
+            + self.destination_address
+            + SURB_IDENTIFIER
+            + padding
         )
 
 
