@@ -20,7 +20,7 @@ from sphinx.error import UnknownRoutingFlagError
 from sphinx.header.keys import RoutingKeys
 from sphinx.header.mac import IntegrityHmac
 from sphinx.node import Node, NodeAddress
-from sphinx.utils import random_bytes, zero_bytes
+from sphinx.utils import random_bytes, zero_bytes, xor
 
 
 @dataclass
@@ -430,8 +430,3 @@ def decrypt(data: bytes, key: bytes) -> bytes:
     # Decryption is the same as encryption
     # because a common pseudo random value is used for XOR
     return encrypt(data, key)
-
-
-def xor(ba1: bytes, ba2: bytes) -> bytes:
-    """Bitwise XOR operation"""
-    return bytes([_a ^ _b for _a, _b in zip(ba1, ba2)])
