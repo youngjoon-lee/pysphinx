@@ -120,8 +120,8 @@ class EncapsulatedRoutingInformation:
     @classmethod
     def from_bytes(cls, data: bytes) -> Self:
         return cls(
-            EncryptedRoutingInformation(data[IntegrityHmac.size() :]),
-            IntegrityHmac(data[: IntegrityHmac.size()]),
+            EncryptedRoutingInformation(data[IntegrityHmac.SIZE :]),
+            IntegrityHmac(data[: IntegrityHmac.SIZE]),
         )
 
 
@@ -131,75 +131,6 @@ class RoutingFlag(Enum):
 
     def bytes(self) -> bytes:
         return bytes(self.value)
-
-
-@dataclass
-class EncryptedRoutingInformation:
-    "An encrypted routing information using a private key of a certain mix node."
-
-    value: bytes
-
-    def __init__(self, value: bytes):
-        """Override the default constructor to check the size of value."""
-        if len(value) != EncryptedRoutingInformation.size():
-            raise ValueError("Invalid value length", len(value))
-
-        self.value = value
-
-    @staticmethod
-    def size() -> int:
-        """
-        To make the size of Sphinx header constant, the size of this class is constant.
-        """
-        return RoutingInformation.meta_size() * MAX_PATH_LENGTH
-
-    def truncate(self) -> TruncatedRoutingInformation:
-        """
-        Truncate the encrypted routing information as much as the size of a single filler.
-
-        This method can be used when this routing information is about to be encapsulated once more.
-        For more details, please see Filler.
-        """
-        return TruncatedRoutingInformation(
-            self.value[: len(self.value) - Filler.one_step_size()]
-        )
-
-    def unwrap(
-        self, stream_cipher_key: bytes
-    ) -> Tuple[Optional[EncapsulatedRoutingInformation], NodeAddress]:
-        """
-        Decrypt the routing information and return a next node address and a next EncapsulatedRoutingInformation if exists.
-        """
-        # Since this EncryptedRoutingInformation has been truncated when being encapsulated,
-        # add zero padding as much as the truncated bytes, before decrypting it.
-        padding = zero_bytes(Filler.one_step_size())
-        decrypted = decrypt(self.value + padding, stream_cipher_key)
-
-        flag = RoutingFlag(decrypted[0:FLAG_LENGTH])
-        match flag:
-            case RoutingFlag.ROUTING_FLAG_FORWARD_HOP:
-                i = FLAG_LENGTH + VERSION_LENGTH
-                node_address = decrypted[i : i + NODE_ADDRESS_LENGTH]
-                i += NODE_ADDRESS_LENGTH + DELAY_LENGTH
-                next_hop_integrity_mac = IntegrityHmac(
-                    decrypted[i : i + IntegrityHmac.size()]
-                )
-                i += IntegrityHmac.size()
-                encrypted_next_routing_info = EncryptedRoutingInformation(decrypted[i:])
-                return (
-                    EncapsulatedRoutingInformation(
-                        encrypted_next_routing_info, next_hop_integrity_mac
-                    ),
-                    node_address,
-                )
-            case RoutingFlag.ROUTING_FLAG_FINAL_HOP:
-                i = FLAG_LENGTH + VERSION_LENGTH
-                destination_address = decrypted[i : i + NODE_ADDRESS_LENGTH]
-                i += NODE_ADDRESS_LENGTH
-                _ = decrypted[i : i + SURB_IDENTIFIER_LENGTH]
-                return (None, destination_address)
-            case _:
-                raise UnknownRoutingFlagError(flag)
 
 
 @dataclass
@@ -213,16 +144,14 @@ class RoutingInformation:
     header_integrity_mac: bytes
     next_routing_info: TruncatedRoutingInformation
 
-    @staticmethod
-    def meta_size() -> int:
-        # 60 bytes in total
-        return (
-            FLAG_LENGTH
-            + VERSION_LENGTH
-            + NODE_ADDRESS_LENGTH
-            + DELAY_LENGTH
-            + IntegrityHmac.size()
-        )
+    # 60 bytes in total
+    META_SIZE: int = (
+        FLAG_LENGTH
+        + VERSION_LENGTH
+        + NODE_ADDRESS_LENGTH
+        + DELAY_LENGTH
+        + IntegrityHmac.SIZE
+    )
 
     @classmethod
     def build(
@@ -250,6 +179,128 @@ class RoutingInformation:
 
 
 @dataclass
+class Filler:
+    """
+    This class represents a set of multiple fillers, 1 less than the length of mix route.
+    A single filler has the same size as a single RoutingInformation.
+
+    A single filler is used to make the routing information that has been unwrapped once
+    have the same size as the routing information before unwrapped.
+
+    For the same purpose, a set of multiple fillers (this class) is meant to be
+    appended to a EncryptedPaddedFinalRoutingInformation.
+    """
+
+    value: bytes
+
+    """A size of a single filler, which is the same as the size of RoutingInformation"""
+    ONE_STEP_SIZE: int = RoutingInformation.META_SIZE
+
+    def __init__(self, value: bytes):
+        """Override the default constructor to check the size of value."""
+        if len(value) % self.ONE_STEP_SIZE != 0:
+            raise ValueError("Invalid value length", len(value))
+
+        self.value = value
+
+    @staticmethod
+    def size(route_len: int) -> int:
+        # Note that this is not one_step_size * route_len
+        # because the information of the first mix node in the route doesn't need to be
+        # encapsulated in a Sphinx packet.
+        # A packet sender always know the address of the first mix node.
+        return Filler.ONE_STEP_SIZE * (route_len - 1)
+
+    @classmethod
+    def build(cls, routing_keys: List[RoutingKeys]) -> Self:
+        if len(routing_keys) > MAX_PATH_LENGTH:
+            raise ValueError("Too many routing keys", len(routing_keys))
+
+        filler = b""
+        # except the last key
+        for routing_key in routing_keys[: len(routing_keys) - 1]:
+            filler += zero_bytes(Filler.ONE_STEP_SIZE)
+
+            # This process is the same as encrypting RoutingInformation to create EncryptedRoutingInformation,
+            # so that a single filler can be easily reproduced and appended to the EncapsulatedRoutingInformation
+            # when it is unwrapped.
+            #
+            # The implementation of the regular encryption can be found at the end of this file.
+            rand = pseudo_random(routing_key.stream_cipher_key)
+            assert len(filler) <= len(rand)
+            # XOR with the last len(filler) bytes of rand
+            filler = xor(filler, rand[len(rand) - len(filler) :])
+
+        assert len(filler) == Filler.size(len(routing_keys))
+        return cls(filler)
+
+
+@dataclass
+class EncryptedRoutingInformation:
+    "An encrypted routing information using a private key of a certain mix node."
+
+    value: bytes
+
+    # To make the size of Sphinx header constant, the size of this class is constant.
+    SIZE: int = RoutingInformation.META_SIZE * MAX_PATH_LENGTH
+
+    def __init__(self, value: bytes):
+        """Override the default constructor to check the size of value."""
+        if len(value) != EncryptedRoutingInformation.SIZE:
+            raise ValueError("Invalid value length", len(value))
+
+        self.value = value
+
+    def truncate(self) -> TruncatedRoutingInformation:
+        """
+        Truncate the encrypted routing information as much as the size of a single filler.
+
+        This method can be used when this routing information is about to be encapsulated once more.
+        For more details, please see Filler.
+        """
+        return TruncatedRoutingInformation(
+            self.value[: len(self.value) - Filler.ONE_STEP_SIZE]
+        )
+
+    def unwrap(
+        self, stream_cipher_key: bytes
+    ) -> Tuple[Optional[EncapsulatedRoutingInformation], NodeAddress]:
+        """
+        Decrypt the routing information and return a next node address and a next EncapsulatedRoutingInformation if exists.
+        """
+        # Since this EncryptedRoutingInformation has been truncated when being encapsulated,
+        # add zero padding as much as the truncated bytes, before decrypting it.
+        padding = zero_bytes(Filler.ONE_STEP_SIZE)
+        decrypted = decrypt(self.value + padding, stream_cipher_key)
+
+        flag = RoutingFlag(decrypted[0:FLAG_LENGTH])
+        match flag:
+            case RoutingFlag.ROUTING_FLAG_FORWARD_HOP:
+                i = FLAG_LENGTH + VERSION_LENGTH
+                node_address = decrypted[i : i + NODE_ADDRESS_LENGTH]
+                i += NODE_ADDRESS_LENGTH + DELAY_LENGTH
+                next_hop_integrity_mac = IntegrityHmac(
+                    decrypted[i : i + IntegrityHmac.SIZE]
+                )
+                i += IntegrityHmac.SIZE
+                encrypted_next_routing_info = EncryptedRoutingInformation(decrypted[i:])
+                return (
+                    EncapsulatedRoutingInformation(
+                        encrypted_next_routing_info, next_hop_integrity_mac
+                    ),
+                    node_address,
+                )
+            case RoutingFlag.ROUTING_FLAG_FINAL_HOP:
+                i = FLAG_LENGTH + VERSION_LENGTH
+                destination_address = decrypted[i : i + NODE_ADDRESS_LENGTH]
+                i += NODE_ADDRESS_LENGTH
+                _ = decrypted[i : i + SURB_IDENTIFIER_LENGTH]
+                return (None, destination_address)
+            case _:
+                raise UnknownRoutingFlagError(flag)
+
+
+@dataclass
 class TruncatedRoutingInformation:
     """
     Represent an encrypted routing information truncated as much as a single filler.
@@ -257,16 +308,14 @@ class TruncatedRoutingInformation:
 
     value: bytes
 
+    SIZE: int = EncryptedRoutingInformation.SIZE - Filler.ONE_STEP_SIZE
+
     def __init__(self, value: bytes):
         """Override the default constructor to check the size of value."""
-        if len(value) != TruncatedRoutingInformation.size():
+        if len(value) != TruncatedRoutingInformation.SIZE:
             raise ValueError("Invalid value length", len(value))
 
         self.value = value
-
-    @staticmethod
-    def size() -> int:
-        return EncryptedRoutingInformation.size() - Filler.one_step_size()
 
 
 @dataclass
@@ -278,16 +327,14 @@ class FinalRoutingInformation:
     flag: RoutingFlag
     destination_address: NodeAddress
 
+    # 52 bytes in total
+    SIZE: int = (
+        FLAG_LENGTH + VERSION_LENGTH + NODE_ADDRESS_LENGTH + SURB_IDENTIFIER_LENGTH
+    )
+
     @classmethod
     def build(cls, destination: NodeAddress) -> Self:
         return cls(RoutingFlag.ROUTING_FLAG_FINAL_HOP, destination)
-
-    @staticmethod
-    def size() -> int:
-        # 52 bytes in total
-        return (
-            FLAG_LENGTH + VERSION_LENGTH + NODE_ADDRESS_LENGTH + SURB_IDENTIFIER_LENGTH
-        )
 
     def add_padding(self, route_len: int) -> PaddedFinalRoutingInformation:
         """
@@ -321,9 +368,9 @@ class PaddedFinalRoutingInformation:
         the same as other EncryptedRoutingInformations that contain RoutingInformation.
         """
         return (
-            EncryptedRoutingInformation.size()
+            EncryptedRoutingInformation.SIZE
             - Filler.size(route_len)
-            - FinalRoutingInformation.size()
+            - FinalRoutingInformation.SIZE
         )
 
     def encrypt(self, key: bytes) -> EncryptedPaddedFinalRoutingInformation:
@@ -342,65 +389,6 @@ class EncryptedPaddedFinalRoutingInformation:
         return EncryptedRoutingInformation(self.value + filler.value)
 
 
-@dataclass
-class Filler:
-    """
-    This class represents a set of multiple fillers, 1 less than the length of mix route.
-    A single filler has the same size as a single RoutingInformation.
-
-    A single filler is used to make the routing information that has been unwrapped once
-    have the same size as the routing information before unwrapped.
-
-    For the same purpose, a set of multiple fillers (this class) is meant to be
-    appended to a EncryptedPaddedFinalRoutingInformation.
-    """
-
-    value: bytes
-
-    def __init__(self, value: bytes):
-        """Override the default constructor to check the size of value."""
-        if len(value) % self.one_step_size() != 0:
-            raise ValueError("Invalid value length", len(value))
-
-        self.value = value
-
-    @staticmethod
-    def size(route_len: int) -> int:
-        # Note that this is not one_step_size * route_len
-        # because the information of the first mix node in the route doesn't need to be
-        # encapsulated in a Sphinx packet.
-        # A packet sender always know the address of the first mix node.
-        return Filler.one_step_size() * (route_len - 1)
-
-    @staticmethod
-    def one_step_size() -> int:
-        """A size of a single filler, which is the same as the size of RoutingInformation"""
-        return RoutingInformation.meta_size()
-
-    @classmethod
-    def build(cls, routing_keys: List[RoutingKeys]) -> Self:
-        if len(routing_keys) > MAX_PATH_LENGTH:
-            raise ValueError("Too many routing keys", len(routing_keys))
-
-        filler = b""
-        # except the last key
-        for routing_key in routing_keys[: len(routing_keys) - 1]:
-            filler += zero_bytes(Filler.one_step_size())
-
-            # This process is the same as encrypting RoutingInformation to create EncryptedRoutingInformation,
-            # so that a single filler can be easily reproduced and appended to the EncapsulatedRoutingInformation
-            # when it is unwrapped.
-            #
-            # The implementation of the regular encryption can be found at the end of this file.
-            rand = pseudo_random(routing_key.stream_cipher_key)
-            assert len(filler) <= len(rand)
-            # XOR with the last len(filler) bytes of rand
-            filler = xor(filler, rand[len(rand) - len(filler) :])
-
-        assert len(filler) == Filler.size(len(routing_keys))
-        return cls(filler)
-
-
 AES128CTR_NONCE = zero_bytes(16)
 
 
@@ -410,7 +398,7 @@ def pseudo_random(key: bytes) -> bytes:
     generated using AES128-CTR with a constant nonce.
     """
     return aes128ctr(
-        zero_bytes(EncryptedRoutingInformation.size() + Filler.one_step_size()),
+        zero_bytes(EncryptedRoutingInformation.SIZE + Filler.ONE_STEP_SIZE),
         key,
         AES128CTR_NONCE,
     )
