@@ -43,8 +43,12 @@ class EncapsulatedRoutingInformation:
         """
         Build EncapsulatedRoutingInformation by building sub-EncapsulatedRoutingInformation recursively.
         """
-        assert len(route) > 0
-        assert len(route) == len(routing_keys)
+        if len(route) == 0:
+            raise ValueError("empty route")
+        if len(route) != len(routing_keys):
+            raise ValueError(
+                "the length of routing_keys must be equal to the length of route"
+            )
 
         final_keys = routing_keys[-1]
         encapsulated_destination_routing_info = cls.for_final_hop(
@@ -132,8 +136,10 @@ class EncryptedRoutingInformation:
     value: bytes
 
     def __init__(self, value: bytes):
-        """Override the default constructor to assert the size of value."""
-        assert len(value) == EncryptedRoutingInformation.size()
+        """Override the default constructor to check the size of value."""
+        if len(value) != EncryptedRoutingInformation.size():
+            raise ValueError("Invalid value length", len(value))
+
         self.value = value
 
     @staticmethod
@@ -247,8 +253,10 @@ class TruncatedRoutingInformation:
     value: bytes
 
     def __init__(self, value: bytes):
-        """Override the default constructor to assert the size of value."""
-        assert len(value) == TruncatedRoutingInformation.size()
+        """Override the default constructor to check the size of value."""
+        if len(value) != TruncatedRoutingInformation.size():
+            raise ValueError("Invalid value length", len(value))
+
         self.value = value
 
     @staticmethod
@@ -341,8 +349,10 @@ class Filler:
     value: bytes
 
     def __init__(self, value: bytes):
-        """Override the default constructor to assert the size of value."""
-        assert len(value) % self.one_step_size() == 0
+        """Override the default constructor to check the size of value."""
+        if len(value) % self.one_step_size() != 0:
+            raise ValueError("Invalid value length", len(value))
+
         self.value = value
 
     @staticmethod
@@ -360,7 +370,8 @@ class Filler:
 
     @classmethod
     def build(cls, routing_keys: List[RoutingKeys]) -> Self:
-        assert len(routing_keys) <= MAX_PATH_LENGTH
+        if len(routing_keys) > MAX_PATH_LENGTH:
+            raise ValueError("Too many routing keys", len(routing_keys))
 
         filler = b""
         # except the last key

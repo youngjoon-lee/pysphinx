@@ -14,8 +14,10 @@ class IntegrityHmac:
     value: bytes
 
     def __init__(self, value: bytes):
-        """Override the default constructor to assert the size of value"""
-        assert len(value) == IntegrityHmac.size()
+        """Override the default constructor to check the size of value"""
+        if len(value) != IntegrityHmac.size():
+            raise ValueError("invalid length of HMAC", len(value))
+
         self.value = value
 
     @staticmethod

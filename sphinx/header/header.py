@@ -55,10 +55,11 @@ class SphinxHeader:
         """
         routing_keys = self.compute_routing_keys(self.shared_pubkey, private_key)
 
-        assert self.routing_info.integrity_mac.verify(
+        if not self.routing_info.integrity_mac.verify(
             self.routing_info.encrypted_routing_info.value,
             routing_keys.header_integrity_hmac_key,
-        )
+        ):
+            raise ValueError("HMAC authentication failed")
 
         routing_info_and_addr = self.routing_info.encrypted_routing_info.unwrap(
             routing_keys.stream_cipher_key

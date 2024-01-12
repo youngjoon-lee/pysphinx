@@ -30,7 +30,8 @@ class Payload:
 
         This padding mechanism is the same as Nym's Sphinx implementation.
         """
-        assert len(plain_payload) <= Payload.max_plain_payload_size()
+        if len(plain_payload) > Payload.max_plain_payload_size():
+            raise ValueError("Invalid length of plain_payload", len(plain_payload))
 
         padded = (
             zero_bytes(SECURITY_PARAMETER)
@@ -64,7 +65,11 @@ class Payload:
         this method must be called to parse the unwrapped payload into
         the original payload by removing leading/trailing paddings.
         """
-        assert self.data.startswith(zero_bytes(SECURITY_PARAMETER))
+        if not self.data.startswith(zero_bytes(SECURITY_PARAMETER)):
+            raise ValueError("failed to find leading zero padding")
+
         indicator_idx = self.data.rfind(PAYLOAD_TRAILING_PADDING_INDICATOR)
-        assert indicator_idx != -1
+        if indicator_idx == -1:
+            raise ValueError("failed to find trailing padding indicator")
+
         return self.data[SECURITY_PARAMETER:indicator_idx]
