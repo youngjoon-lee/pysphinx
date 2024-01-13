@@ -14,10 +14,18 @@ def compute_hmac_sha256(data: bytes, key: bytes) -> bytes:
 
 
 def lioness_encrypt(data: bytes, key: bytes) -> bytes:
-    # TODO: Couldn't find a lioness package that works with the latest Python. Implement it.
+    """
+    TODO: For now, this method returns data as it is without encryption.
+    Lioness encryption with with ChaCha20 and Blake2b is going to be implemented soon
+    https://github.com/youngjoon-lee/pysphinx/issues/4
+    """
     return data
 
 
 def lioness_decrypt(data: bytes, key: bytes) -> bytes:
-    # TODO: Couldn't find a lioness package that works with the latest Python. Implement it.
+    """
+    TODO: For now, this method returns data as it is without encryption.
+    Lioness encryption with with ChaCha20 and Blake2b is going to be implemented soon
+    https://github.com/youngjoon-lee/pysphinx/issues/4
+    """
     return data
