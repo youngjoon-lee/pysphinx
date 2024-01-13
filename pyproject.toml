@@ -1,0 +1,30 @@
+[project]
+name = "pysphinx"
+version = "0.0.1"
+description = "Sphinx packet implementation for mix networks"
+authors = [{ name = "Youngjoon Lee", email = "taxihighway@gmail.com" }]
+maintainers = [{ name = "Youngjoon Lee", email = "taxihighway@gmail.com" }]
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3 :: Only",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: OS Independent",
+]
+dynamic = ["dependencies"]
+
+[project.urls]
+Homepage = "https://github.com/youngjoon-lee/pysphinx"
+Issues = "https://github.com/youngjoon-lee/pysphinx/issues"
+
+[build-system]
+requires = ["hatchling", "hatch-requirements-txt"]
+build-backend = "hatchling.build"
+
+[tool.hatch.metadata.hooks.requirements_txt]
+files = ["requirements.txt"]
