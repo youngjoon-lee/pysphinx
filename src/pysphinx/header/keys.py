@@ -10,7 +10,7 @@ from cryptography.hazmat.primitives.asymmetric.x25519 import (
 )
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 
-from sphinxpacket.node import Node
+from pysphinx.node import Node
 
 
 @dataclass

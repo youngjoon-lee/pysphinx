@@ -1,8 +1,8 @@
 from dataclasses import dataclass
 from typing import Self
 
-from sphinxpacket.const import SECURITY_PARAMETER
-from sphinxpacket.crypto import compute_hmac_sha256
+from pysphinx.const import SECURITY_PARAMETER
+from pysphinx.crypto import compute_hmac_sha256
 
 
 @dataclass
