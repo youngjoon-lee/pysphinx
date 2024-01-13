@@ -6,3 +6,7 @@ Sphinx packet implementation compliant with the standard spec: https://cypherpun
 ```bash
 pip install pysphinx
 ```
+
+## Getting Started
+
+See [tests/test_sphinx.py](./tests/test_sphinx.py).
