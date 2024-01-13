@@ -1,5 +1,5 @@
 [project]
-name = "sphinxpacket"
+name = "pysphinx"
 version = "0.0.1"
 description = "Sphinx packet implementation for mix networks"
 authors = [{ name = "Youngjoon Lee", email = "taxihighway@gmail.com" }]
@@ -19,8 +19,8 @@ classifiers = [
 dynamic = ["dependencies"]
 
 [project.urls]
-Homepage = "https://github.com/youngjoon-lee/sphinxpacket-py"
-Issues = "https://github.com/youngjoon-lee/sphinxpacket-py/issues"
+Homepage = "https://github.com/youngjoon-lee/pysphinx"
+Issues = "https://github.com/youngjoon-lee/pysphinx/issues"
 
 [build-system]
 requires = ["hatchling", "hatch-requirements-txt"]
