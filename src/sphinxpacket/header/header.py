@@ -8,9 +8,9 @@ from cryptography.hazmat.primitives.asymmetric.x25519 import (
     X25519PublicKey,
 )
 
-from sphinx.header.keys import KeyMaterial, RoutingKeys
-from sphinx.header.routing import EncapsulatedRoutingInformation, Filler
-from sphinx.node import Node, NodeAddress
+from sphinxpacket.header.keys import KeyMaterial, RoutingKeys
+from sphinxpacket.header.routing import EncapsulatedRoutingInformation, Filler
+from sphinxpacket.node import Node, NodeAddress
 
 
 @dataclass

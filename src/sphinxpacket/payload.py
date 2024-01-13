@@ -3,9 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import List, Self
 
-from sphinx.const import SECURITY_PARAMETER
-from sphinx.crypto import lioness_decrypt, lioness_encrypt
-from sphinx.utils import zero_bytes
+from sphinxpacket.const import SECURITY_PARAMETER
+from sphinxpacket.crypto import lioness_decrypt, lioness_encrypt
+from sphinxpacket.utils import zero_bytes
 
 # For the packet indistinguishability, the size of payload (padded) is a constant.
 DEFAULT_PAYLOAD_SIZE = 1024

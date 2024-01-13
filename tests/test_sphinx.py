@@ -1,14 +1,13 @@
 from unittest import TestCase
 
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
-
-from sphinx.node import Node
-from sphinx.sphinx import (
+from sphinxpacket.node import Node
+from sphinxpacket.sphinx import (
     ProcessedFinalHopPacket,
     ProcessedForwardHopPacket,
     SphinxPacket,
 )
-from sphinx.utils import random_bytes
+from sphinxpacket.utils import random_bytes
 
 
 class TestSphinx(TestCase):

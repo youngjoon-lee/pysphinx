@@ -5,14 +5,14 @@ from typing import List, Self
 
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
 
-from sphinx.error import UnknownHeaderTypeError
-from sphinx.header.header import (
+from sphinxpacket.error import UnknownHeaderTypeError
+from sphinxpacket.header.header import (
     ProcessedFinalHopHeader,
     ProcessedForwardHopHeader,
     SphinxHeader,
 )
-from sphinx.node import Node, NodeAddress
-from sphinx.payload import Payload
+from sphinxpacket.node import Node, NodeAddress
+from sphinxpacket.payload import Payload
 
 
 @dataclass

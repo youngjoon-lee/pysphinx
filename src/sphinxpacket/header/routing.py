@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import List, Optional, Self, Tuple
 
-from sphinx.const import (
+from sphinxpacket.const import (
     DELAY,
     DELAY_LENGTH,
     FLAG_LENGTH,
@@ -15,12 +15,12 @@ from sphinx.const import (
     VERSION,
     VERSION_LENGTH,
 )
-from sphinx.crypto import aes128ctr
-from sphinx.error import UnknownRoutingFlagError
-from sphinx.header.keys import RoutingKeys
-from sphinx.header.mac import IntegrityHmac
-from sphinx.node import Node, NodeAddress
-from sphinx.utils import random_bytes, zero_bytes, xor
+from sphinxpacket.crypto import aes128ctr
+from sphinxpacket.error import UnknownRoutingFlagError
+from sphinxpacket.header.keys import RoutingKeys
+from sphinxpacket.header.mac import IntegrityHmac
+from sphinxpacket.node import Node, NodeAddress
+from sphinxpacket.utils import random_bytes, xor, zero_bytes
 
 
 @dataclass
