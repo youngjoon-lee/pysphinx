@@ -2,7 +2,6 @@ from dataclasses import dataclass
 from typing import TypeAlias
 
 from cryptography.hazmat.primitives.asymmetric.x25519 import (
-    X25519PrivateKey,
     X25519PublicKey,
 )
 
@@ -12,8 +11,5 @@ NodeAddress: TypeAlias = bytes
 
 @dataclass
 class Node:
-    private_key: X25519PrivateKey
+    public_key: X25519PublicKey
     addr: NodeAddress
-
-    def public_key(self) -> X25519PublicKey:
-        return self.private_key.public_key()

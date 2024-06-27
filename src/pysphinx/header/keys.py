@@ -35,7 +35,7 @@ class KeyMaterial:
         routing_keys = []
         accumulated_privkey = initial_ephemeral_privkey
         for node in route:
-            dh_shared_key = accumulated_privkey.exchange(node.public_key())
+            dh_shared_key = accumulated_privkey.exchange(node.public_key)
             node_routing_keys = RoutingKeys.derive(dh_shared_key)
 
             # TODO: find a proper library for Ristretto operations
