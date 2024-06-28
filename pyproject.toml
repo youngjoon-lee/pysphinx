@@ -1,6 +1,6 @@
 [project]
 name = "pysphinx"
-version = "0.0.2"
+version = "0.0.3"
 description = "Sphinx packet implementation for mix networks"
 authors = [{ name = "Youngjoon Lee", email = "taxihighway@gmail.com" }]
 maintainers = [{ name = "Youngjoon Lee", email = "taxihighway@gmail.com" }]

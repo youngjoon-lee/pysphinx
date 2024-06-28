@@ -48,3 +48,18 @@ class TestSphinx(TestCase):
 
         # Verify message as a destination
         self.assertEqual(processed_packet.payload.recover_plain_playload(), msg)
+
+    def test_sphinx_serde(self):
+        private_keys = [X25519PrivateKey.generate() for _ in range(12)]
+        nodes = [
+            Node(private_key.public_key(), random_bytes(32))
+            for private_key in private_keys
+        ]
+        destination = nodes[0]
+        route = [nodes[i] for i in range(1, 4)]
+
+        packet = SphinxPacket.build(random_bytes(500), route, destination)
+
+        serialized = packet.bytes()
+        deserilized = SphinxPacket.from_bytes(serialized)
+        self.assertEqual(packet, deserilized)

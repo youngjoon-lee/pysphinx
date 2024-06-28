@@ -89,6 +89,32 @@ class SphinxHeader:
         dh_shared_key = private_key.exchange(shared_pubkey)
         return RoutingKeys.derive(dh_shared_key)
 
+    def bytes(self) -> bytes:
+        pubkey = self.shared_pubkey.public_bytes_raw()
+        routing_info = self.routing_info.bytes()
+        return (
+            len(pubkey).to_bytes(8, byteorder="little")
+            + pubkey
+            + len(routing_info).to_bytes(8, byteorder="little")
+            + routing_info
+        )
+
+    @classmethod
+    def from_bytes(cls, data: bytes) -> Self:
+        a = 0
+        b = 8
+        pubkey_size = int.from_bytes(data[a:b], byteorder="little")
+        a = b
+        b += pubkey_size
+        pubkey = X25519PublicKey.from_public_bytes(data[a:b])
+        a = b
+        b += 8
+        routing_info_size = int.from_bytes(data[a:b], byteorder="little")
+        a = b
+        b += routing_info_size
+        routing_info = EncapsulatedRoutingInformation.from_bytes(data[a:b])
+        return cls(pubkey, routing_info)
+
 
 @dataclass
 class ProcessedForwardHopHeader:

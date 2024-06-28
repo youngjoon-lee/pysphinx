@@ -76,6 +76,32 @@ class SphinxPacket:
             case _:
                 raise UnknownHeaderTypeError
 
+    def bytes(self):
+        header = self.header.bytes()
+        payload = self.payload.data
+        return (
+            len(header).to_bytes(8, byteorder="little")
+            + header
+            + len(payload).to_bytes(8, byteorder="little")
+            + payload
+        )
+
+    @classmethod
+    def from_bytes(cls, data: bytes) -> Self:
+        a = 0
+        b = 8
+        header_size = int.from_bytes(data[a:b], byteorder="little")
+        a = b
+        b += header_size
+        header = SphinxHeader.from_bytes(data[a:b])
+        a = b
+        b += 8
+        payload_size = int.from_bytes(data[a:b], byteorder="little")
+        a = b
+        b += payload_size
+        payload = Payload(data[a:b])
+        return cls(header, payload)
+
 
 @dataclass
 class ProcessedForwardHopPacket:
