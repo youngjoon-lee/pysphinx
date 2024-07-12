@@ -4,11 +4,11 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Self
 
+from pysphinx.config import Config
 from pysphinx.const import (
     DELAY,
     DELAY_LENGTH,
     FLAG_LENGTH,
-    MAX_PATH_LENGTH,
     NODE_ADDRESS_LENGTH,
     SURB_IDENTIFIER,
     SURB_IDENTIFIER_LENGTH,
@@ -212,7 +212,7 @@ class Filler:
 
     @classmethod
     def build(cls, routing_keys: list[RoutingKeys]) -> Self:
-        if len(routing_keys) > MAX_PATH_LENGTH:
+        if len(routing_keys) > Config.max_path_length:
             raise ValueError("Too many routing keys", len(routing_keys))
 
         filler = b""
@@ -240,15 +240,17 @@ class EncryptedRoutingInformation:
 
     value: bytes
 
-    # To make the size of Sphinx header constant, the size of this class is constant.
-    SIZE: int = RoutingInformation.META_SIZE * MAX_PATH_LENGTH
-
     def __init__(self, value: bytes):
         """Override the default constructor to check the size of value."""
-        if len(value) != EncryptedRoutingInformation.SIZE:
+        if len(value) != self.size():
             raise ValueError("Invalid value length", len(value))
 
         self.value = value
+
+    @staticmethod
+    def size() -> int:
+        # To make the size of Sphinx header constant, the size of this class is constant.
+        return RoutingInformation.META_SIZE * Config.max_path_length
 
     def truncate(self) -> TruncatedRoutingInformation:
         """
@@ -305,14 +307,16 @@ class TruncatedRoutingInformation:
 
     value: bytes
 
-    SIZE: int = EncryptedRoutingInformation.SIZE - Filler.ONE_STEP_SIZE
-
     def __init__(self, value: bytes):
         """Override the default constructor to check the size of value."""
-        if len(value) != TruncatedRoutingInformation.SIZE:
+        if len(value) != self.size():
             raise ValueError("Invalid value length", len(value))
 
         self.value = value
+
+    @staticmethod
+    def size() -> int:
+        return EncryptedRoutingInformation.size() - Filler.ONE_STEP_SIZE
 
 
 @dataclass
@@ -365,7 +369,7 @@ class PaddedFinalRoutingInformation:
         the same as other EncryptedRoutingInformations that contain RoutingInformation.
         """
         return (
-            EncryptedRoutingInformation.SIZE
+            EncryptedRoutingInformation.size()
             - Filler.size(route_len)
             - FinalRoutingInformation.SIZE
         )
@@ -395,7 +399,7 @@ def pseudo_random(key: bytes) -> bytes:
     generated using AES128-CTR with a constant nonce.
     """
     return aes128ctr(
-        zero_bytes(EncryptedRoutingInformation.SIZE + Filler.ONE_STEP_SIZE),
+        zero_bytes(EncryptedRoutingInformation.size() + Filler.ONE_STEP_SIZE),
         key,
         AES128CTR_NONCE,
     )

@@ -1,8 +1,8 @@
 # k in the Sphinx paper
 SECURITY_PARAMETER = 16
-# r in the Sphinx paper
+# `r` in the Sphinx paper
 # In this specification, the max number of mix nodes in a route is limited to this value.
-MAX_PATH_LENGTH = 5
+DEFAULT_MAX_PATH_LENGTH = 6
 # The length of node address which contains an IP address and a port.
 NODE_ADDRESS_LENGTH = 2 * SECURITY_PARAMETER
 # The length of flag that represents the type of routing information (forward-hop or final-hop)
