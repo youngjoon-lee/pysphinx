@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import List, Optional, Self, Tuple
+from typing import Self
 
 from pysphinx.const import (
     DELAY,
@@ -16,7 +16,6 @@ from pysphinx.const import (
     VERSION_LENGTH,
 )
 from pysphinx.crypto import aes128ctr
-from pysphinx.error import UnknownRoutingFlagError
 from pysphinx.header.keys import RoutingKeys
 from pysphinx.header.mac import IntegrityHmac
 from pysphinx.node import Node, NodeAddress
@@ -37,9 +36,9 @@ class EncapsulatedRoutingInformation:
     @classmethod
     def build(
         cls,
-        route: List[Node],
+        route: list[Node],
         destination: Node,
-        routing_keys: List[RoutingKeys],
+        routing_keys: list[RoutingKeys],
         filler: Filler,
     ) -> Self:
         """
@@ -90,8 +89,8 @@ class EncapsulatedRoutingInformation:
     def for_forward_hops(
         cls,
         encapsulated_destination_routing_info: Self,
-        route: List[Node],
-        routing_keys: List[RoutingKeys],
+        route: list[Node],
+        routing_keys: list[RoutingKeys],
     ) -> Self:
         """
         Build EncapsulatedRoutingInformation for all mix nodes except the final mix node in the route.
@@ -212,7 +211,7 @@ class Filler:
         return Filler.ONE_STEP_SIZE * (route_len - 1)
 
     @classmethod
-    def build(cls, routing_keys: List[RoutingKeys]) -> Self:
+    def build(cls, routing_keys: list[RoutingKeys]) -> Self:
         if len(routing_keys) > MAX_PATH_LENGTH:
             raise ValueError("Too many routing keys", len(routing_keys))
 
@@ -264,7 +263,7 @@ class EncryptedRoutingInformation:
 
     def unwrap(
         self, stream_cipher_key: bytes
-    ) -> Tuple[Optional[EncapsulatedRoutingInformation], NodeAddress]:
+    ) -> tuple[EncapsulatedRoutingInformation | None, NodeAddress]:
         """
         Decrypt the routing information and return a next node address and a next EncapsulatedRoutingInformation if exists.
         """
@@ -296,8 +295,6 @@ class EncryptedRoutingInformation:
                 i += NODE_ADDRESS_LENGTH
                 _ = decrypted[i : i + SURB_IDENTIFIER_LENGTH]
                 return (None, destination_address)
-            case _:
-                raise UnknownRoutingFlagError(flag)
 
 
 @dataclass

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Self
+from typing import Self
 
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric.x25519 import (
@@ -21,18 +21,18 @@ class KeyMaterial:
     """
 
     initial_ephemeral_pubkey: X25519PublicKey
-    routing_keys: List[RoutingKeys]
+    routing_keys: list[RoutingKeys]
 
     @classmethod
     def derive(
-        cls, initial_ephemeral_privkey: X25519PrivateKey, route: List[Node]
+        cls, initial_ephemeral_privkey: X25519PrivateKey, route: list[Node]
     ) -> Self:
         """
         Derive KeyMaterial for route using initial_ephemeral_privkey provided.
         """
         initial_ephemeral_pubkey = initial_ephemeral_privkey.public_key()
 
-        routing_keys = []
+        routing_keys: list[RoutingKeys] = []
         accumulated_privkey = initial_ephemeral_privkey
         for node in route:
             dh_shared_key = accumulated_privkey.exchange(node.public_key)

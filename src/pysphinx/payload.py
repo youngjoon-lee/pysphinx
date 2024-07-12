@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Self
+from typing import Self
 
 from pysphinx.const import SECURITY_PARAMETER
 from pysphinx.crypto import lioness_decrypt, lioness_encrypt
@@ -17,7 +17,7 @@ class Payload:
     data: bytes
 
     @classmethod
-    def build(cls, plain_payload: bytes, payload_keys: List[bytes]) -> Self:
+    def build(cls, plain_payload: bytes, payload_keys: list[bytes]) -> Self:
         payload = cls.add_padding(plain_payload)
         for payload_key in reversed(payload_keys):
             payload = lioness_encrypt(payload, payload_key)

@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Self
+from typing import Self
 
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
 
-from pysphinx.error import UnknownHeaderTypeError
 from pysphinx.header.header import (
     ProcessedFinalHopHeader,
     ProcessedForwardHopHeader,
@@ -28,7 +27,7 @@ class SphinxPacket:
     def build(
         cls,
         message: bytes,
-        route: List[Node],
+        route: list[Node],
         destination: Node,
     ) -> Self:
         """
@@ -73,8 +72,6 @@ class SphinxPacket:
                     processed_header.destination_address,
                     self.payload.unwrap(processed_header.payload_key),
                 )
-            case _:
-                raise UnknownHeaderTypeError
 
     def bytes(self):
         header = self.header.bytes()

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Self, Tuple
+from typing import Self
 
 from cryptography.hazmat.primitives.asymmetric.x25519 import (
     X25519PrivateKey,
@@ -27,9 +27,9 @@ class SphinxHeader:
     def build(
         cls,
         initial_ephemeral_privkey: X25519PrivateKey,
-        route: List[Node],
+        route: list[Node],
         destination: Node,
-    ) -> Tuple[Self, List[bytes]]:
+    ) -> tuple[Self, list[bytes]]:
         """
         Construct a SphinxHeader by encapsulating all routing information
         and keys that can be used to encrypt a payload.
