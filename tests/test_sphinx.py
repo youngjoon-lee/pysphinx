@@ -3,8 +3,8 @@ from unittest import TestCase
 
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
 from pysphinx.config import Config
+from pysphinx.const import DEFAULT_PAYLOAD_SIZE
 from pysphinx.node import Node
-from pysphinx.payload import DEFAULT_PAYLOAD_SIZE
 from pysphinx.sphinx import (
     ProcessedFinalHopPacket,
     ProcessedForwardHopPacket,
@@ -84,3 +84,25 @@ class TestSphinx(TestCase):
         self.assertEqual(len(packet_1mix_long.bytes()), len(packet_2mix_long.bytes()))
 
         self.assertGreater(len(packet_1mix_long.bytes()), len(packet_1mix.bytes()))
+
+    def test_custom_max_message_size(self):
+        private_key = X25519PrivateKey.generate()
+        node = Node(private_key.public_key(), random_bytes(32))
+
+        Config.set_max_message_size(2000)
+        msg = random_bytes(2000)
+        packet = SphinxPacket.build(msg, [node], node)
+
+        processed_packet = packet.process(private_key)
+        if not isinstance(processed_packet, ProcessedFinalHopPacket):
+            self.fail()
+        self.assertEqual(msg, processed_packet.payload.recover_plain_playload())
+
+        longer_msg = random_bytes(Config.max_message_size)
+        packet_with_longer_msg = SphinxPacket.build(longer_msg, [node], node)
+        self.assertEqual(len(packet.bytes()), len(packet_with_longer_msg.bytes()))
+
+        processed_packet = packet_with_longer_msg.process(private_key)
+        if not isinstance(processed_packet, ProcessedFinalHopPacket):
+            self.fail()
+        self.assertEqual(longer_msg, processed_packet.payload.recover_plain_playload())

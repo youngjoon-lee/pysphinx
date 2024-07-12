@@ -18,3 +18,10 @@ SURB_IDENTIFIER = b"\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01
 # TODO: Delay is not supported for now, but the delay field in the Sphinx header remains for the consistency.
 DELAY_LENGTH = 8
 DELAY = b"\x00\x00\x00\x00\x00\x00\x00\x00"
+
+# For the packet indistinguishability, the size of payload (padded) is a constant by default.
+DEFAULT_PAYLOAD_SIZE = 1024
+PAYLOAD_TRAILING_PADDING_INDICATOR = b"\x01"
+DEFAULT_MAX_PLAIN_PAYLOAD_SIZE = (
+    DEFAULT_PAYLOAD_SIZE - SECURITY_PARAMETER - len(PAYLOAD_TRAILING_PADDING_INDICATOR)
+)

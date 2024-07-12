@@ -31,12 +31,22 @@ class SphinxPacket:
         destination: Node,
     ) -> Self:
         """
-        This method is a constructor for packet senders.
+        Constructs a Sphinx packet.
 
-        A packet sender has to determine a mix route and a mix destination.
+        Args:
+            message: The message to be sent
+            route: The route through which the message will be sent
+            destination: The final destination node of the message
+            max_message_size: The maximum size of the Sphinx packet
 
-        A message must fit into the capacity of a single Sphinx packet.
-        For details, please see Payload.
+        Raises:
+            ValueError: If the message exceeds max_message_size
+
+        Returns:
+            Self: A Sphinx packet
+
+        Notes:
+            - If the message is shorter than max_message_size, zero padding is added to ensure uniform packet size.
         """
         header_and_payload_keys = SphinxHeader.build(
             X25519PrivateKey.generate(), route, destination
