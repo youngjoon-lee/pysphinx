@@ -11,7 +11,7 @@ from pysphinx.header.header import (
     SphinxHeader,
 )
 from pysphinx.node import Node, NodeAddress
-from pysphinx.payload import Payload
+from pysphinx.payload import DEFAULT_MAX_PLAIN_PAYLOAD_SIZE, Payload
 
 
 @dataclass
@@ -29,6 +29,7 @@ class SphinxPacket:
         message: bytes,
         route: list[Node],
         destination: Node,
+        max_message_size: int = DEFAULT_MAX_PLAIN_PAYLOAD_SIZE,
     ) -> Self:
         """
         This method is a constructor for packet senders.
@@ -44,7 +45,7 @@ class SphinxPacket:
         header = header_and_payload_keys[0]
         payload_keys = header_and_payload_keys[1]
 
-        payload = Payload.build(message, payload_keys)
+        payload = Payload.build(message, payload_keys, max_message_size)
 
         return cls(header, payload)
 

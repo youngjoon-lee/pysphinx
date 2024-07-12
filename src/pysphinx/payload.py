@@ -7,9 +7,12 @@ from pysphinx.const import SECURITY_PARAMETER
 from pysphinx.crypto import lioness_decrypt, lioness_encrypt
 from pysphinx.utils import zero_bytes
 
-# For the packet indistinguishability, the size of payload (padded) is a constant.
+# For the packet indistinguishability, the size of payload (padded) is a constant by default.
 DEFAULT_PAYLOAD_SIZE = 1024
 PAYLOAD_TRAILING_PADDING_INDICATOR = b"\x01"
+DEFAULT_MAX_PLAIN_PAYLOAD_SIZE = (
+    DEFAULT_PAYLOAD_SIZE - SECURITY_PARAMETER - len(PAYLOAD_TRAILING_PADDING_INDICATOR)
+)
 
 
 @dataclass
@@ -17,42 +20,32 @@ class Payload:
     data: bytes
 
     @classmethod
-    def build(cls, plain_payload: bytes, payload_keys: list[bytes]) -> Self:
-        payload = cls.add_padding(plain_payload)
+    def build(
+        cls,
+        plain_payload: bytes,
+        payload_keys: list[bytes],
+        max_plain_payload_size: int = DEFAULT_MAX_PLAIN_PAYLOAD_SIZE,
+    ) -> Self:
+        payload = cls.add_padding(plain_payload, max_plain_payload_size)
         for payload_key in reversed(payload_keys):
             payload = lioness_encrypt(payload, payload_key)
         return cls(payload)
 
     @staticmethod
-    def add_padding(plain_payload: bytes) -> bytes:
+    def add_padding(plain_payload: bytes, max_plain_payload_size: int) -> bytes:
         """
         Add leading and trailing padding to a plain payload
 
         This padding mechanism is the same as Nym's Sphinx implementation.
         """
-        if len(plain_payload) > Payload.max_plain_payload_size():
-            raise ValueError("Invalid length of plain_payload", len(plain_payload))
+        if len(plain_payload) > max_plain_payload_size:
+            raise ValueError("plain_payload is too long", len(plain_payload))
 
-        padded = (
+        return (
             zero_bytes(SECURITY_PARAMETER)
             + plain_payload
             + PAYLOAD_TRAILING_PADDING_INDICATOR
-            + zero_bytes(
-                DEFAULT_PAYLOAD_SIZE
-                - SECURITY_PARAMETER
-                - len(plain_payload)
-                - len(PAYLOAD_TRAILING_PADDING_INDICATOR)
-            )
-        )
-        assert len(padded) == DEFAULT_PAYLOAD_SIZE
-        return padded
-
-    @staticmethod
-    def max_plain_payload_size() -> int:
-        return (
-            DEFAULT_PAYLOAD_SIZE
-            - SECURITY_PARAMETER
-            - len(PAYLOAD_TRAILING_PADDING_INDICATOR)
+            + zero_bytes(max_plain_payload_size - len(plain_payload))
         )
 
     def unwrap(self, payload_key: bytes) -> Payload:
