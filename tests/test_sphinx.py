@@ -1,9 +1,7 @@
-from typing import override
 from unittest import TestCase
 
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
-from pysphinx.config import Config
-from pysphinx.const import DEFAULT_PAYLOAD_SIZE
+from pysphinx.const import DEFAULT_MAX_ROUTE_LENGTH, DEFAULT_PAYLOAD_SIZE
 from pysphinx.node import Node
 from pysphinx.sphinx import (
     ProcessedFinalHopPacket,
@@ -14,10 +12,6 @@ from pysphinx.utils import random_bytes
 
 
 class TestSphinx(TestCase):
-    @override
-    def setUp(self) -> None:
-        Config.reset()
-
     def test_sphinx(self):
         private_keys = [X25519PrivateKey.generate() for _ in range(4)]
         nodes = [
@@ -69,7 +63,7 @@ class TestSphinx(TestCase):
         deserialized = SphinxPacket.from_bytes(serialized)
         self.assertEqual(packet, deserialized)
 
-    def test_constant_packet_size_based_on_max_path_length(self):
+    def test_constant_packet_size_based_on_max_route_length(self):
         private_key = X25519PrivateKey.generate()
         node = Node(private_key.public_key(), random_bytes(32))
 
@@ -78,28 +72,35 @@ class TestSphinx(TestCase):
         packet_2mix = SphinxPacket.build(msg, [node, node], node)
         self.assertEqual(len(packet_1mix.bytes()), len(packet_2mix.bytes()))
 
-        Config.set_max_path_length(Config.max_path_length * 2)
-        packet_1mix_long = SphinxPacket.build(msg, [node], node)
-        packet_2mix_long = SphinxPacket.build(msg, [node, node], node)
+        packet_1mix_long = SphinxPacket.build(
+            msg, [node], node, DEFAULT_MAX_ROUTE_LENGTH * 2
+        )
+        packet_2mix_long = SphinxPacket.build(
+            msg, [node, node], node, DEFAULT_MAX_ROUTE_LENGTH * 2
+        )
         self.assertEqual(len(packet_1mix_long.bytes()), len(packet_2mix_long.bytes()))
 
         self.assertGreater(len(packet_1mix_long.bytes()), len(packet_1mix.bytes()))
 
-    def test_custom_max_message_size(self):
+    def test_custom_max_plain_payload_size(self):
         private_key = X25519PrivateKey.generate()
         node = Node(private_key.public_key(), random_bytes(32))
 
-        Config.set_max_message_size(2000)
+        max_plain_payload_size = 3000
         msg = random_bytes(2000)
-        packet = SphinxPacket.build(msg, [node], node)
+        packet = SphinxPacket.build(
+            msg, [node], node, max_plain_payload_size=max_plain_payload_size
+        )
 
         processed_packet = packet.process(private_key)
         if not isinstance(processed_packet, ProcessedFinalHopPacket):
             self.fail()
         self.assertEqual(msg, processed_packet.payload.recover_plain_playload())
 
-        longer_msg = random_bytes(Config.max_message_size)
-        packet_with_longer_msg = SphinxPacket.build(longer_msg, [node], node)
+        longer_msg = random_bytes(max_plain_payload_size)
+        packet_with_longer_msg = SphinxPacket.build(
+            longer_msg, [node], node, max_plain_payload_size=max_plain_payload_size
+        )
         self.assertEqual(len(packet.bytes()), len(packet_with_longer_msg.bytes()))
 
         processed_packet = packet_with_longer_msg.process(private_key)

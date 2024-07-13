@@ -28,6 +28,7 @@ class SphinxHeader:
         cls,
         initial_ephemeral_privkey: X25519PrivateKey,
         route: list[Node],
+        max_route_length: int,
         destination: Node,
     ) -> tuple[Self, list[bytes]]:
         """
@@ -35,7 +36,7 @@ class SphinxHeader:
         and keys that can be used to encrypt a payload.
         """
         key_material = KeyMaterial.derive(initial_ephemeral_privkey, route)
-        filler = Filler.build(key_material.routing_keys)
+        filler = Filler.build(key_material.routing_keys, max_route_length)
         routing_info = EncapsulatedRoutingInformation.build(
             route, destination, key_material.routing_keys, filler
         )
@@ -100,7 +101,7 @@ class SphinxHeader:
         )
 
     @classmethod
-    def from_bytes(cls, data: bytes) -> Self:
+    def from_bytes(cls, data: bytes, max_route_len: int) -> Self:
         a = 0
         b = 8
         pubkey_size = int.from_bytes(data[a:b], byteorder="little")
@@ -112,7 +113,9 @@ class SphinxHeader:
         routing_info_size = int.from_bytes(data[a:b], byteorder="little")
         a = b
         b += routing_info_size
-        routing_info = EncapsulatedRoutingInformation.from_bytes(data[a:b])
+        routing_info = EncapsulatedRoutingInformation.from_bytes(
+            data[a:b], max_route_len
+        )
         return cls(pubkey, routing_info)
 
 

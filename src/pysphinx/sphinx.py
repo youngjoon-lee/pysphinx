@@ -5,6 +5,7 @@ from typing import Self
 
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
 
+from pysphinx.const import DEFAULT_MAX_PLAIN_PAYLOAD_SIZE, DEFAULT_MAX_ROUTE_LENGTH
 from pysphinx.header.header import (
     ProcessedFinalHopHeader,
     ProcessedForwardHopHeader,
@@ -29,6 +30,8 @@ class SphinxPacket:
         message: bytes,
         route: list[Node],
         destination: Node,
+        max_route_length: int = DEFAULT_MAX_ROUTE_LENGTH,
+        max_plain_payload_size: int = DEFAULT_MAX_PLAIN_PAYLOAD_SIZE,
     ) -> Self:
         """
         Constructs a Sphinx packet.
@@ -37,24 +40,34 @@ class SphinxPacket:
             message: The message to be sent
             route: The route through which the message will be sent
             destination: The final destination node of the message
-            max_message_size: The maximum size of the Sphinx packet
+            max_route_length:
+                The maximum length of mix route that the user can specify when creating a Sphinx packet.
+                Even if the user specifies less shorter route,
+                padding is added to ensure that all Sphinx packets have the uniform size.
+                This padding is not distinguishable by mix nodes.
+                In other words, mix nodes cannot know how many mix nodes the user specified in the route.
+                If the user specifies a longer route than this value, an error is raised.
+            max_plain_payload_size:
+                The maximum size of payload that can be wrapped in a Sphinx packet
+                Shorter payloads will be padded to this size to ensure that all Sphinx packets have the uniform size.
+                Payloads longer than this size will raise an error.
 
         Raises:
-            ValueError: If the message exceeds max_message_size
+            ValueError: If the message exceeds max_plain_payload_size
 
         Returns:
             Self: A Sphinx packet
 
         Notes:
-            - If the message is shorter than max_message_size, zero padding is added to ensure uniform packet size.
+            - If the message is shorter than max_plain_payload_size, zero padding is added to ensure uniform packet size.
         """
         header_and_payload_keys = SphinxHeader.build(
-            X25519PrivateKey.generate(), route, destination
+            X25519PrivateKey.generate(), route, max_route_length, destination
         )
         header = header_and_payload_keys[0]
         payload_keys = header_and_payload_keys[1]
 
-        payload = Payload.build(message, payload_keys)
+        payload = Payload.build(message, payload_keys, max_plain_payload_size)
 
         return cls(header, payload)
 
@@ -94,13 +107,15 @@ class SphinxPacket:
         )
 
     @classmethod
-    def from_bytes(cls, data: bytes) -> Self:
+    def from_bytes(
+        cls, data: bytes, max_route_len: int = DEFAULT_MAX_ROUTE_LENGTH
+    ) -> Self:
         a = 0
         b = 8
         header_size = int.from_bytes(data[a:b], byteorder="little")
         a = b
         b += header_size
-        header = SphinxHeader.from_bytes(data[a:b])
+        header = SphinxHeader.from_bytes(data[a:b], max_route_len)
         a = b
         b += 8
         payload_size = int.from_bytes(data[a:b], byteorder="little")

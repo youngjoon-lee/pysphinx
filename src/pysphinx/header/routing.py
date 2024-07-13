@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Self
 
-from pysphinx.config import Config
 from pysphinx.const import (
     DELAY,
     DELAY_LENGTH,
@@ -57,7 +56,10 @@ class EncapsulatedRoutingInformation:
         )
 
         return cls.for_forward_hops(
-            encapsulated_destination_routing_info, route, routing_keys
+            encapsulated_destination_routing_info,
+            route,
+            routing_keys,
+            filler.max_route_len,
         )
 
     @classmethod
@@ -76,7 +78,7 @@ class EncapsulatedRoutingInformation:
         """
         encrypted_routing_info = (
             FinalRoutingInformation.build(destination.addr)
-            .add_padding(route_len)
+            .add_padding(route_len, filler.max_route_len)
             .encrypt(routing_keys.stream_cipher_key)
             .combine_with_filler(filler)
         )
@@ -91,6 +93,7 @@ class EncapsulatedRoutingInformation:
         encapsulated_destination_routing_info: Self,
         route: list[Node],
         routing_keys: list[RoutingKeys],
+        max_route_len: int,
     ) -> Self:
         """
         Build EncapsulatedRoutingInformation for all mix nodes except the final mix node in the route.
@@ -105,7 +108,9 @@ class EncapsulatedRoutingInformation:
             routing_info = RoutingInformation.build(
                 node.addr, next_encapsulated_routing_info
             )
-            encrypted_routing_info = routing_info.encrypt(routing_key.stream_cipher_key)
+            encrypted_routing_info = routing_info.encrypt(
+                routing_key.stream_cipher_key, max_route_len
+            )
             integrity_mac = IntegrityHmac.compute(
                 encrypted_routing_info.value, routing_key.header_integrity_hmac_key
             )
@@ -117,9 +122,9 @@ class EncapsulatedRoutingInformation:
         return self.integrity_mac.value + self.encrypted_routing_info.value
 
     @classmethod
-    def from_bytes(cls, data: bytes) -> Self:
+    def from_bytes(cls, data: bytes, max_route_len: int) -> Self:
         return cls(
-            EncryptedRoutingInformation(data[IntegrityHmac.SIZE :]),
+            EncryptedRoutingInformation(data[IntegrityHmac.SIZE :], max_route_len),
             IntegrityHmac(data[: IntegrityHmac.SIZE]),
         )
 
@@ -165,7 +170,7 @@ class RoutingInformation:
             next_encapsulated_routing_info.encrypted_routing_info.truncate(),
         )
 
-    def encrypt(self, key: bytes) -> EncryptedRoutingInformation:
+    def encrypt(self, key: bytes, max_route_len: int) -> EncryptedRoutingInformation:
         body = (
             self.flag.bytes()
             + VERSION
@@ -174,7 +179,9 @@ class RoutingInformation:
             + self.header_integrity_mac
             + self.next_routing_info.value
         )
-        return EncryptedRoutingInformation(encrypt(body, key))
+        return EncryptedRoutingInformation(
+            encrypt(body, key, max_route_len), max_route_len
+        )
 
 
 @dataclass
@@ -191,16 +198,18 @@ class Filler:
     """
 
     value: bytes
+    max_route_len: int
 
     """A size of a single filler, which is the same as the size of RoutingInformation"""
     ONE_STEP_SIZE: int = RoutingInformation.META_SIZE
 
-    def __init__(self, value: bytes):
+    def __init__(self, value: bytes, max_route_len: int):
         """Override the default constructor to check the size of value."""
         if len(value) % self.ONE_STEP_SIZE != 0:
             raise ValueError("Invalid value length", len(value))
 
         self.value = value
+        self.max_route_len = max_route_len
 
     @staticmethod
     def size(route_len: int) -> int:
@@ -211,8 +220,8 @@ class Filler:
         return Filler.ONE_STEP_SIZE * (route_len - 1)
 
     @classmethod
-    def build(cls, routing_keys: list[RoutingKeys]) -> Self:
-        if len(routing_keys) > Config.max_path_length:
+    def build(cls, routing_keys: list[RoutingKeys], max_route_len: int) -> Self:
+        if len(routing_keys) > max_route_len:
             raise ValueError("Too many routing keys", len(routing_keys))
 
         filler = b""
@@ -225,13 +234,13 @@ class Filler:
             # when it is unwrapped.
             #
             # The implementation of the regular encryption can be found at the end of this file.
-            rand = pseudo_random(routing_key.stream_cipher_key)
+            rand = pseudo_random(routing_key.stream_cipher_key, max_route_len)
             assert len(filler) <= len(rand)
             # XOR with the last len(filler) bytes of rand
             filler = xor(filler, rand[len(rand) - len(filler) :])
 
         assert len(filler) == Filler.size(len(routing_keys))
-        return cls(filler)
+        return cls(filler, max_route_len)
 
 
 @dataclass
@@ -239,18 +248,20 @@ class EncryptedRoutingInformation:
     "An encrypted routing information using a private key of a certain mix node."
 
     value: bytes
+    max_route_len: int
 
-    def __init__(self, value: bytes):
+    def __init__(self, value: bytes, max_route_len: int):
         """Override the default constructor to check the size of value."""
-        if len(value) != self.size():
+        if len(value) != self.size(max_route_len):
             raise ValueError("Invalid value length", len(value))
 
         self.value = value
+        self.max_route_len = max_route_len
 
     @staticmethod
-    def size() -> int:
+    def size(max_route_len: int) -> int:
         # To make the size of Sphinx header constant, the size of this class is constant.
-        return RoutingInformation.META_SIZE * Config.max_path_length
+        return RoutingInformation.META_SIZE * max_route_len
 
     def truncate(self) -> TruncatedRoutingInformation:
         """
@@ -260,7 +271,7 @@ class EncryptedRoutingInformation:
         For more details, please see Filler.
         """
         return TruncatedRoutingInformation(
-            self.value[: len(self.value) - Filler.ONE_STEP_SIZE]
+            self.value[: len(self.value) - Filler.ONE_STEP_SIZE], self.max_route_len
         )
 
     def unwrap(
@@ -272,7 +283,7 @@ class EncryptedRoutingInformation:
         # Since this EncryptedRoutingInformation has been truncated when being encapsulated,
         # add zero padding as much as the truncated bytes, before decrypting it.
         padding = zero_bytes(Filler.ONE_STEP_SIZE)
-        decrypted = decrypt(self.value + padding, stream_cipher_key)
+        decrypted = decrypt(self.value + padding, stream_cipher_key, self.max_route_len)
 
         flag = RoutingFlag(decrypted[0:FLAG_LENGTH])
         match flag:
@@ -284,7 +295,9 @@ class EncryptedRoutingInformation:
                     decrypted[i : i + IntegrityHmac.SIZE]
                 )
                 i += IntegrityHmac.SIZE
-                encrypted_next_routing_info = EncryptedRoutingInformation(decrypted[i:])
+                encrypted_next_routing_info = EncryptedRoutingInformation(
+                    decrypted[i:], self.max_route_len
+                )
                 return (
                     EncapsulatedRoutingInformation(
                         encrypted_next_routing_info, next_hop_integrity_mac
@@ -307,16 +320,16 @@ class TruncatedRoutingInformation:
 
     value: bytes
 
-    def __init__(self, value: bytes):
+    def __init__(self, value: bytes, max_route_len: int):
         """Override the default constructor to check the size of value."""
-        if len(value) != self.size():
+        if len(value) != self.size(max_route_len):
             raise ValueError("Invalid value length", len(value))
 
         self.value = value
 
     @staticmethod
-    def size() -> int:
-        return EncryptedRoutingInformation.size() - Filler.ONE_STEP_SIZE
+    def size(max_route_len: int) -> int:
+        return EncryptedRoutingInformation.size(max_route_len) - Filler.ONE_STEP_SIZE
 
 
 @dataclass
@@ -337,19 +350,24 @@ class FinalRoutingInformation:
     def build(cls, destination: NodeAddress) -> Self:
         return cls(RoutingFlag.ROUTING_FLAG_FINAL_HOP, destination)
 
-    def add_padding(self, route_len: int) -> PaddedFinalRoutingInformation:
+    def add_padding(
+        self, route_len: int, max_route_len: int
+    ) -> PaddedFinalRoutingInformation:
         """
         To make the final encrypted routing information (that will contain this routing information)
         have the same size as upper-layer encrypted routing information,
         add random-byte padding to the tail of FinalRoutingInformation.
         """
-        padding = random_bytes(PaddedFinalRoutingInformation.padding_size(route_len))
+        padding = random_bytes(
+            PaddedFinalRoutingInformation.padding_size(route_len, max_route_len)
+        )
         return PaddedFinalRoutingInformation(
             self.flag.bytes()
             + VERSION
             + self.destination_address
             + SURB_IDENTIFIER
-            + padding
+            + padding,
+            max_route_len,
         )
 
 
@@ -360,22 +378,25 @@ class PaddedFinalRoutingInformation:
     """
 
     value: bytes
+    max_route_len: int
 
     @staticmethod
-    def padding_size(route_len: int) -> int:
+    def padding_size(route_len: int, max_route_len: int) -> int:
         """
         The point of this padding is making the size of EncryptedRoutingInformation
         (that will contain this final routing information)
         the same as other EncryptedRoutingInformations that contain RoutingInformation.
         """
         return (
-            EncryptedRoutingInformation.size()
+            EncryptedRoutingInformation.size(max_route_len)
             - Filler.size(route_len)
             - FinalRoutingInformation.SIZE
         )
 
     def encrypt(self, key: bytes) -> EncryptedPaddedFinalRoutingInformation:
-        return EncryptedPaddedFinalRoutingInformation(encrypt(self.value, key))
+        return EncryptedPaddedFinalRoutingInformation(
+            encrypt(self.value, key, self.max_route_len)
+        )
 
 
 @dataclass
@@ -387,35 +408,39 @@ class EncryptedPaddedFinalRoutingInformation:
         Because the size of this class is smaller than EncryptedRoutingInformation,
         add fillers to create EncryptedRoutingInformation from this value.
         """
-        return EncryptedRoutingInformation(self.value + filler.value)
+        return EncryptedRoutingInformation(
+            self.value + filler.value, filler.max_route_len
+        )
 
 
 AES128CTR_NONCE = zero_bytes(16)
 
 
-def pseudo_random(key: bytes) -> bytes:
+def pseudo_random(key: bytes, max_route_len: int) -> bytes:
     """
     Return a pseudo-random bytes with length EncryptedRoutingInformation + a single filler
     generated using AES128-CTR with a constant nonce.
     """
     return aes128ctr(
-        zero_bytes(EncryptedRoutingInformation.size() + Filler.ONE_STEP_SIZE),
+        zero_bytes(
+            EncryptedRoutingInformation.size(max_route_len) + Filler.ONE_STEP_SIZE
+        ),
         key,
         AES128CTR_NONCE,
     )
 
 
-def encrypt(data: bytes, key: bytes) -> bytes:
+def encrypt(data: bytes, key: bytes, max_route_len: int) -> bytes:
     """
     data is encrypted by XOR with a pseudo-random bytes generated using key,
     so that it can be decrypted later by XOR with the same pseudo-random bytes from the same key.
     """
-    rand = pseudo_random(key)
+    rand = pseudo_random(key, max_route_len)
     assert len(data) <= len(rand)
     return xor(data, rand[: len(data)])  # XOR with truncating rand
 
 
-def decrypt(data: bytes, key: bytes) -> bytes:
+def decrypt(data: bytes, key: bytes, max_route_len: int) -> bytes:
     # Decryption is the same as encryption
     # because a common pseudo random value is used for XOR
-    return encrypt(data, key)
+    return encrypt(data, key, max_route_len)
